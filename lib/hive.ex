@@ -1,0 +1,2 @@
+defmodule Hive do
+end
