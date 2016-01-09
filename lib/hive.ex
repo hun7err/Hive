@@ -1,7 +1,49 @@
+defmodule Hacks do
+  defp dirtyHack(what, method), do: :crypto.hash(method, what)
+  def getId() do
+    :os.timestamp
+      |> Tuple.to_list
+      |> Enum.join
+      |> dirtyHack(:sha)
+      |> Base.encode16
+      |> String.downcase
+  end
+end
+
 defmodule Hive do
   require Record
 
+  # scheduling - :even_spread, :random_pick, :optimize
   defmodule Cluster do
+    defstruct name: Hacks.getId,
+              nodes: [],
+              scheduling: :even_spread
+
+    def run() do
+    end
+
+    defp getContainerCount(node) do
+      try do
+        container_count = Hive.Docker.containers(node) |> length
+      rescue
+        e in HTTPotion.HTTPError -> -1
+      end
+    end
+
+    defp calculateRank(node, scheduling) do
+      case scheduling do
+        :even_spread ->
+          getContainerCount node
+        :random_pick ->
+          :random.uniform
+        :optimize ->
+          0 # TODO: add some algorithm with weights
+      end
+    end
+
+    defp rankedNodes(nodes, scheduling) do
+      ranked_node_list = (for node <- nodes, do: calculateRank node, scheduling) |> Enum.sort
+    end
   end
 
   defmodule Node do
@@ -44,6 +86,9 @@ defmodule Hive do
     end
 
     defmodule Container do
+    end
+
+    defmodule Swarm do
     end
   end
 end
