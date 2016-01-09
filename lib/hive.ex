@@ -51,44 +51,91 @@ defmodule Hive do
   end
 
   defmodule Docker do
+    defmodule Container do
+      defstruct id: "", node: nil
+    end
+
     defp getUrl(docker_node, uri) do
       docker_node.host <> ":" <> to_string(docker_node.port) <> uri
     end
 
+    defp endpoint(docker_node, method, name,
+                  data \\ [],
+                  url_params \\ %{},
+                  headers \\ ["Content-Type": "application/json",
+                              "Accept": "application/json"]) do
+      suffix = if name == "info", do: "", else: "/json"
+      try do
+        case method do
+          "get" ->
+            uri = "/" <> name <> suffix
+            response = HTTPotion.get getUrl(docker_node, uri)
+            
+            case response.status_code do
+              200 -> {:ok, response}
+              _ -> {:error, response}
+            end
+          "post" ->
+            params = for {key, value} <- url_params, do: to_string(key) <> "=" <> to_string(value)
+            
+            params = if url_params == %{}, do: "?" <> Enum.join(params, "&"), else: ""
+            response = HTTPotion.post getUrl(docker_node,
+                                             "/" <> name <> params),
+                                      [body: Poison.encode!(data),
+                                       headers: headers]
+
+            case response.status_code do
+              code when code in [200, 201] -> {:ok, response}
+              _ -> {:error, response}
+            end
+          _ -> {:error, "unsupported http method"}
+        end
+      rescue
+        e in HTTPoison.HTTPError -> {:error, e.message}
+      end
+    end
+
+    defp handleEndpointResponse(output, handler \\ &Poison.Parser.parse!/1)
+        when is_function(handler) do
+      case output do
+        {:ok, response} ->
+          handler.(response.body)
+        {:error, response} ->
+          raise to_string(response.status_code) <> ": " <> response.body
+      end
+    end
+
     def info(docker_node) do
-      response = HTTPotion.get getUrl(docker_node, "/info")
-      Poison.Parser.parse! response.body
+      endpoint(docker_node, "get", "info")
+        |> handleEndpointResponse
     end
 
     def containers(docker_node) do
-      response = HTTPotion.get getUrl(docker_node, "/containers/json")
-      Poison.Parser.parse! response.body
+      endpoint(docker_node, "get", "containers")
+        |> handleEndpointResponse
+    end
+
+    def images(docker_node) do
+       endpoint(docker_node, "get", "images")
+        |> handleEndpointResponse
     end
 
     def create(docker_node, name, image \\ "ubuntu", cmd \\ "/bin/bash") do
       data = %{"Image": image, "Cmd": cmd }
-      response = HTTPotion.post getUrl(docker_node,
-                                      "/containers/create?name=" <> name),
-                                [body: Poison.encode!(data),
-                                 headers: ["Content-Type": "application/json"]
-                                ]
 
-      case response.status_code do
-        201 ->
-          resp_json = Poison.Parser.parse! response.body
+      result = endpoint(docker_node, "post", "containers/create", data, %{"name": name})
+          |> handleEndpointResponse
       
-          case Dict.fetch(resp_json, "Id") do
-            {:ok, container_id} -> container_id
-            :error -> raise RuntimeError
+      case result do
+        response_json ->
+          case Dict.fetch(response_json, "Id") do
+            {:ok, container_id} ->
+              %Hive.Docker.Container{"id": container_id, "node": docker_node}
+            _ -> raise RuntimeError
           end
-        _ -> raise RuntimeError
+        _ ->
+          "I didn't expect the Spanish Inquisition!"
       end
-    end
-
-    defmodule Container do
-    end
-
-    defmodule Swarm do
     end
   end
 end
