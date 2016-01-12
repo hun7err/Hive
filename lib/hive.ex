@@ -19,7 +19,9 @@ defmodule Hive do
               nodes: [],
               scheduling: :even_spread
 
-    def run() do
+    def run(cluster, name, link \\ [], image \\ "ubuntu", cmd \\ "/bin/bash") do
+      target = hd rankedNodes(cluster)
+      Hive.Docker.run target, name, link, image, cmd
     end
 
     defp getContainerCount(node) do
@@ -41,8 +43,9 @@ defmodule Hive do
       end
     end
 
-    defp rankedNodes(nodes, scheduling) do
-      ranked_node_list = (for node <- nodes, do: calculateRank node, scheduling) |> Enum.sort
+    defp rankedNodes(cluster) do
+      cluster.nodes
+        |> Enum.sort(&(calculateRank(&1, cluster.scheduling) > calculateRank(&2, cluster.scheduling)))
     end
   end
 
@@ -64,7 +67,7 @@ defmodule Hive do
                   url_params \\ %{},
                   headers \\ ["Content-Type": "application/json",
                               "Accept": "application/json"]) do
-      suffix = if name == "info", do: "", else: "/json"
+      suffix = if name in ["containers", "images"], do: "/json", else: ""
       try do
         case method do
           "get" ->
@@ -85,7 +88,7 @@ defmodule Hive do
                                        headers: headers]
 
             case response.status_code do
-              code when code in [200, 201] -> {:ok, response}
+              code when code in [200, 201, 204] -> {:ok, response}
               _ -> {:error, response}
             end
           _ -> {:error, "unsupported http method"}
@@ -120,8 +123,8 @@ defmodule Hive do
         |> handleEndpointResponse
     end
 
-    def create(docker_node, name, image \\ "ubuntu", cmd \\ "/bin/bash") do
-      data = %{"Image": image, "Cmd": cmd }
+    def create(docker_node, name, links \\ [], image \\ "ubuntu", cmd \\ "/bin/bash") do
+      data = %{"Image": image, "HostConfig": %{"Links": links}, "Cmd": cmd }
 
       result = endpoint(docker_node, "post", "containers/create", data, %{"name": name})
           |> handleEndpointResponse
@@ -136,6 +139,26 @@ defmodule Hive do
         _ ->
           "I didn't expect the Spanish Inquisition!"
       end
+    end
+
+    def start(docker_node, container) do
+      result = endpoint(docker_node, "post", "containers/" <> container.id <> "/start", %{})
+        |> handleEndpointResponse
+      
+      case result.status_code do
+        204 ->
+          :started
+        304 ->
+          :already_started
+        404 ->
+          :nocontainer
+        500 ->
+          :internal_server_error
+    end
+
+    def run(docker_node, name, link \\ [], image \\ "ubuntu", cmd \\ "/bin/bash") do
+      container_id = create docker_node, name, link, image, cmd
+      start docker_node, container_id
     end
   end
 end
