@@ -19,7 +19,7 @@ defmodule Hive do
               nodes: [],
               scheduling: :even_spread
 
-    def run(cluster, name, link \\ [], image \\ "ubuntu", cmd \\ "/bin/bash") do
+    def run(cluster, name, link \\ [], image \\ "ubuntu", cmd \\ "/bin/bash", network_name \\ "bridge") do
       target = hd rankedNodes(cluster)
       Hive.Docker.run target, name, link, image, cmd
     end
@@ -131,11 +131,12 @@ defmodule Hive do
         |> handleEndpointResponse
     end
 
-    def create(docker_node, name, links \\ [], image \\ "ubuntu:latest", cmd \\ "/bin/bash") do
+    def create(docker_node, name, links \\ [], image \\ "ubuntu:latest", cmd \\ "/bin/bash", network_mode \\ "bridge") do
       data = %{"Image": image, 
                "Tty": true,
                "HostConfig":
-                  %{"Links": links},
+                  %{"Links": links,
+                    "NetworkMode": network_mode},
                "Cmd": cmd }
 
       result = endpoint(docker_node, "post", "containers/create", data, %{"name": String.replace(name, " ", "-")})
@@ -173,8 +174,8 @@ defmodule Hive do
       end 
     end
 
-    def run(docker_node, name, link \\ [], image \\ "ubuntu", cmd \\ "/bin/bash") do
-      container = create docker_node, name, link, image, cmd
+    def run(docker_node, name, link \\ [], image \\ "ubuntu", cmd \\ "/bin/bash", network_mode \\ "bridge") do
+      container = create docker_node, name, link, image, cmd, network_mode
       start container
     end
   end
