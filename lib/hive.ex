@@ -21,7 +21,7 @@ defmodule Hive do
 
     def run(cluster, name, link \\ [], image \\ "ubuntu", cmd \\ "/bin/bash", network_name \\ "bridge") do
       target = hd rankedNodes(cluster)
-      Hive.Docker.run target, name, link, image, cmd
+      Hive.Docker.run target, name, link, image, cmd, network_name
     end
 
     defp getContainerCount(node) do
