@@ -50,12 +50,14 @@ defmodule Hive do
   end
 
   defmodule Node do
-    defstruct host: "127.0.0.1", port: 2375
+    defstruct host: "127.0.0.1",
+              port: 2375
   end
 
   defmodule Docker do
     defmodule Container do
-      defstruct id: "", node: nil
+      defstruct id: "",
+                node: nil
     end
 
     defp getUrl(docker_node, uri) do
@@ -75,24 +77,29 @@ defmodule Hive do
             response = HTTPotion.get getUrl(docker_node, uri)
             
             case response.status_code do
-              200 -> {:ok, response}
-              _ -> {:error, response}
+              200 ->
+                {:ok, response}
+              _ ->
+                {:error, response}
             end
           "post" ->
             params = for {key, value} <- url_params, do: to_string(key) <> "=" <> to_string(value)
             
             params = if url_params != %{}, do: "?" <> Enum.join(params, "&"), else: ""
-            IO.puts "[debug] trying " <> "/" <> name <> params
+            # IO.puts "[debug] trying " <> "/" <> name <> params
             response = HTTPotion.post getUrl(docker_node,
                                              "/" <> name <> params),
                                       [body: Poison.encode!(data),
                                        headers: headers]
 
             case response.status_code do
-              code when code in [200, 201, 204] -> {:ok, response}
-              _ -> {:error, response}
+              code when code in [200, 201, 204, 304] ->
+                {:ok, response}
+              _ ->
+                {:error, response}
             end
-          _ -> {:error, "unsupported http method"}
+          _ ->
+            {:error, "unsupported http method"}
         end
       rescue
         e in HTTPoison.HTTPError -> {:error, e.message}
