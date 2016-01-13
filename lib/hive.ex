@@ -81,7 +81,8 @@ defmodule Hive do
           "post" ->
             params = for {key, value} <- url_params, do: to_string(key) <> "=" <> to_string(value)
             
-            params = if url_params == %{}, do: "?" <> Enum.join(params, "&"), else: ""
+            params = if url_params != %{}, do: "?" <> Enum.join(params, "&"), else: ""
+            IO.puts "[debug] trying " <> "/" <> name <> params
             response = HTTPotion.post getUrl(docker_node,
                                              "/" <> name <> params),
                                       [body: Poison.encode!(data),
@@ -123,10 +124,14 @@ defmodule Hive do
         |> handleEndpointResponse
     end
 
-    def create(docker_node, name, links \\ [], image \\ "ubuntu", cmd \\ "/bin/bash") do
-      data = %{"Image": image, "HostConfig": %{"Links": links}, "Cmd": cmd }
+    def create(docker_node, name, links \\ [], image \\ "ubuntu:latest", cmd \\ "/bin/bash") do
+      data = %{"Image": image, 
+               "Tty": true,
+               "HostConfig":
+                  %{"Links": links},
+               "Cmd": cmd }
 
-      result = endpoint(docker_node, "post", "containers/create", data, %{"name": name})
+      result = endpoint(docker_node, "post", "containers/create", data, %{"name": String.replace(name, " ", "-")})
           |> handleEndpointResponse
       
       case result do
@@ -141,24 +146,29 @@ defmodule Hive do
       end
     end
 
-    def start(docker_node, container) do
-      result = endpoint(docker_node, "post", "containers/" <> container.id <> "/start", %{})
-        |> handleEndpointResponse
-      
-      case result.status_code do
-        204 ->
-          :started
-        304 ->
-          :already_started
-        404 ->
-          :nocontainer
-        500 ->
-          :internal_server_error
+    def start(container) do
+      result = endpoint(container.node, "post", "containers/" <> container.id <> "/start", %{})
+
+      case result do
+        {:ok, response} ->
+          case response.status_code do
+            204 ->
+              {:started, container}
+            304 ->
+              {:already_started, nil}
+            404 ->
+              {:nocontainer, nil}
+            500 ->
+              {:internal_server_error, nil}
+          end
+        error ->
+          error
+      end 
     end
 
     def run(docker_node, name, link \\ [], image \\ "ubuntu", cmd \\ "/bin/bash") do
-      container_id = create docker_node, name, link, image, cmd
-      start docker_node, container_id
+      container = create docker_node, name, link, image, cmd
+      start container
     end
   end
 end
