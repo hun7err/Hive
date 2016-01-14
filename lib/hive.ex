@@ -69,11 +69,10 @@ defmodule Hive do
                   url_params \\ %{},
                   headers \\ ["Content-Type": "application/json",
                               "Accept": "application/json"]) do
-      suffix = if name in ["containers", "images"], do: "/json", else: ""
       try do
         case method do
           "get" ->
-            uri = "/" <> name <> suffix
+            uri = "/" <> name 
             response = HTTPotion.get getUrl(docker_node, uri)
             
             case response.status_code do
@@ -121,13 +120,18 @@ defmodule Hive do
         |> handleEndpointResponse
     end
 
+    def containerInfo(container) do
+      endpoint(container.node, "get", "containers/" <> container.id <> "/json")
+        |> handleEndpointResponse
+    end
+
     def containers(docker_node) do
-      endpoint(docker_node, "get", "containers")
+      endpoint(docker_node, "get", "containers/json")
         |> handleEndpointResponse
     end
 
     def images(docker_node) do
-       endpoint(docker_node, "get", "images")
+       endpoint(docker_node, "get", "images/json")
         |> handleEndpointResponse
     end
 
