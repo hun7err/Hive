@@ -19,9 +19,9 @@ defmodule Hive do
               nodes: [],
               scheduling: :even_spread
 
-    def run(cluster, name, link \\ [], image \\ "ubuntu", cmd \\ ["/bin/bash"], network_name \\ "bridge") do
+    def run(cluster, name, links \\ nil, image \\ "ubuntu", cmd \\ ["/bin/bash"], network_name \\ "bridge") do
       target = hd rankedNodes(cluster)
-      Hive.Docker.run target, name, link, image, cmd, network_name
+      Hive.Docker.run target, name, links, image, cmd, network_name
     end
 
     defp getContainerCount(node) do
@@ -131,7 +131,7 @@ defmodule Hive do
         |> handleEndpointResponse
     end
 
-    def create(docker_node, name, links \\ [], image \\ "ubuntu:latest", cmd \\ ["/bin/bash"], network_mode \\ "bridge") do
+    def create(docker_node, name, links \\ nil, image \\ "ubuntu:latest", cmd \\ ["/bin/bash"], network_mode \\ "bridge") do
       data = %{"Image": image, 
                "Tty": true,
                "HostConfig":
@@ -174,8 +174,8 @@ defmodule Hive do
       end 
     end
 
-    def run(docker_node, name, link \\ [], image \\ "ubuntu", cmd \\ ["/bin/bash"], network_mode \\ "bridge") do
-      container = create docker_node, name, link, image, cmd, network_mode
+    def run(docker_node, name, links \\ nil, image \\ "ubuntu", cmd \\ ["/bin/bash"], network_mode \\ "bridge") do
+      container = create docker_node, name, links, image, cmd, network_mode
       start container
     end
   end
