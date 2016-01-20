@@ -78,7 +78,7 @@ defmodule Hive do
                   data \\ [],
                   headers \\ ["Content-Type": "application/json",
                               "Accept": "application/json"]) do
-      encode = fn value -> if is_map(value) or is_list(value) or is_boolean(value), do: Poison.encode!(value), else: value
+      encode = fn value -> if is_map(value) or is_list(value), do: Poison.encode!(value), else: to_string(value) end
       params = for {key, value} <- url_params, do: to_string(key) <> "=" <> encode.(value)
       params = if url_params != %{}, do: "?" <> Enum.join(params, "&"), else: ""
 
@@ -108,6 +108,15 @@ defmodule Hive do
               _ ->
                 {:error, response}
             end
+          "delete" ->
+            response = HTTPotion.delete getUrl(docker_node,
+                                              "/" <> name <> params)
+            case response.status_code do
+              204 ->
+                {:enoent, response}
+              _ ->
+                {:error, response}
+            end
           _ ->
             {:error, "unsupported http method"}
         end
@@ -121,6 +130,8 @@ defmodule Hive do
       case output do
         {:ok, response} ->
           handler.(response.body)
+        {:enoent, response} ->
+          response.body
         {:error, response} ->
           raise to_string(response.status_code) <> ": " <> response.body
       end
@@ -165,6 +176,26 @@ defmodule Hive do
           %Hive.Docker.Container{"id": container_id, "node": docker_node}
         _ -> raise RuntimeError
       end
+    end
+
+    def remove(what, force \\ false) when is_list(what) and what != [] do
+      [container|tail] = what
+      force = if force, do: 1, else: 0
+
+      endpoint(container.node, "delete", "containers/" <> container.id,
+                        %{"force": force})
+        |> handleEndpointResponse
+
+        remove(tail, force)
+    end
+    def remove(what, _) when is_list(what) and what == [], do: :ok
+
+    def remove(container, force) do
+      force = if force, do: 1, else: 0
+
+      endpoint(container.node, "delete", "containers/" <> container.id,
+                        %{"force": force})
+        |> handleEndpointResponse
     end
 
     def start(container) do
