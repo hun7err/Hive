@@ -26,9 +26,9 @@ defmodule Hive do
 
     defp getContainerCount(node) do
       try do
-        container_count = Hive.Docker.containers(node) |> length
+        Hive.Docker.containers(node) |> length
       rescue
-        e in HTTPotion.HTTPError -> -1
+        HTTPotion.HTTPError -> -1
       end
     end
 
@@ -65,15 +65,19 @@ defmodule Hive do
     end
 
     defp endpoint(docker_node, method, name,
-                  data \\ [],
                   url_params \\ %{},
+                  data \\ [],
                   headers \\ ["Content-Type": "application/json",
                               "Accept": "application/json"]) do
+      params = for {key, value} <- url_params, do: to_string(key) <> "=" <> Poison.encode!(value)
+      params = if url_params != %{}, do: "?" <> Enum.join(params, "&"), else: ""
+
       try do
         case method do
           "get" ->
             uri = "/" <> name 
-            response = HTTPotion.get getUrl(docker_node, uri)
+            IO.puts "trying " <> uri <> params
+            response = HTTPotion.get getUrl(docker_node, uri <> params)
             
             case response.status_code do
               200 ->
@@ -82,9 +86,6 @@ defmodule Hive do
                 {:error, response}
             end
           "post" ->
-            params = for {key, value} <- url_params, do: to_string(key) <> "=" <> to_string(value)
-            
-            params = if url_params != %{}, do: "?" <> Enum.join(params, "&"), else: ""
             # IO.puts "[debug] trying " <> "/" <> name <> params
             response = HTTPotion.post getUrl(docker_node,
                                              "/" <> name <> params),
@@ -125,8 +126,11 @@ defmodule Hive do
         |> handleEndpointResponse
     end
 
-    def containers(docker_node) do
-      endpoint(docker_node, "get", "containers/json")
+    def containers(docker_node, show_all \\ false, filters \\ %{}) do
+      params = %{"filters": filters}
+      if show_all, do: params = Dict.put params, :all, 1
+
+      endpoint(docker_node, "get", "containers/json", params)
         |> handleEndpointResponse
     end
 
@@ -143,23 +147,18 @@ defmodule Hive do
                     "NetworkMode": network_mode},
                "Cmd": cmd }
 
-      result = endpoint(docker_node, "post", "containers/create", data, %{"name": String.replace(name, " ", "-")})
+      result = endpoint(docker_node, "post", "containers/create", %{"name": String.replace(name, " ", "-")}, data)
           |> handleEndpointResponse
       
-      case result do
-        response_json ->
-          case Dict.fetch(response_json, "Id") do
-            {:ok, container_id} ->
-              %Hive.Docker.Container{"id": container_id, "node": docker_node}
-            _ -> raise RuntimeError
-          end
-        _ ->
-          "I didn't expect the Spanish Inquisition!"
+      case Dict.fetch(result, "Id") do
+        {:ok, container_id} ->
+          %Hive.Docker.Container{"id": container_id, "node": docker_node}
+        _ -> raise RuntimeError
       end
     end
 
     def start(container) do
-      result = endpoint(container.node, "post", "containers/" <> container.id <> "/start", %{})
+      result = endpoint(container.node, "post", "containers/" <> container.id <> "/start", %{}, %{})
 
       case result do
         {:ok, response} ->
