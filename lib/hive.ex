@@ -78,7 +78,8 @@ defmodule Hive do
                   data \\ [],
                   headers \\ ["Content-Type": "application/json",
                               "Accept": "application/json"]) do
-      params = for {key, value} <- url_params, do: to_string(key) <> "=" <> Poison.encode!(value)
+      encode = fn value -> if is_map(value) or is_list(value), do: Poison.encode!(value), else: value
+      params = for {key, value} <- url_params, do: to_string(key) <> "=" <> encode.(value)
       params = if url_params != %{}, do: "?" <> Enum.join(params, "&"), else: ""
 
       try do
