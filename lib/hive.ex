@@ -24,6 +24,15 @@ defmodule Hive do
       Hive.Docker.run target, name, links, image, cmd, network_name
     end
 
+    def containers(cluster, show_all \\ false, filters \\ %{}), do: containers cluster.nodes, show_all, filters, length(cluster.nodes), []
+    def containers(nodes, show_all, filters, count, acc) when length(acc) < count do
+      [current_node|rest] = nodes
+      conts = Hive.Docker.containers(current_node, show_all, filters)
+      
+      containers(rest, show_all, filters, count, [conts|acc])
+    end
+    def containers(_, _, _, count, acc) when length(acc) == count, do: List.flatten acc
+
     defp getContainerCount(node) do
       try do
         Hive.Docker.containers(node) |> length
