@@ -86,7 +86,6 @@ defmodule Hive do
         case method do
           "get" ->
             uri = "/" <> name 
-            IO.puts "trying " <> uri <> params
             response = HTTPotion.get getUrl(docker_node, uri <> params)
             
             case response.status_code do
@@ -96,7 +95,6 @@ defmodule Hive do
                 {:error, response}
             end
           "post" ->
-            # IO.puts "[debug] trying " <> "/" <> name <> params
             response = HTTPotion.post getUrl(docker_node,
                                              "/" <> name <> params),
                                       [body: Poison.encode!(data),
@@ -110,7 +108,8 @@ defmodule Hive do
             end
           "delete" ->
             response = HTTPotion.delete getUrl(docker_node,
-                                              "/" <> name <> params)
+                                              "/" <> name <> params),
+                                              [timeout: 30_000]
             case response.status_code do
               204 ->
                 {:enoent, response}
